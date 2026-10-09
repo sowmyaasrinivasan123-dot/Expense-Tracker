@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expense Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;800&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3efe6;--ink:#1d2a24;--muted:#6b756f;--card:#fffdf8;--line:#d9d2c0;--in:#1f7a4d;--out:#b8442f;--bal:#24406b}
+*{box-sizing:border-box;margin:0}
+body{font-family:'Work Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:24px 16px 48px}
+.wrap{max-width:960px;margin:auto}
+h1{font-family:'Fraunces',Georgia,serif;font-size:2.2rem;font-weight:800;margin-bottom:4px}
+.sub{color:var(--muted);margin-bottom:24px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px}
+.sum{background:var(--card);border:1px solid var(--line);border-left-width:6px;border-radius:6px;padding:16px}
+.sum small{color:var(--muted);font-size:.85rem}
+.sum b{display:block;font-family:'Fraunces',serif;font-size:1.8rem;margin-top:4px}
+.sum.in{border-left-color:var(--in)}.sum.out{border-left-color:var(--out)}.sum.bal{border-left-color:var(--bal)}
+.main{display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start}
+@media(max-width:780px){.main{grid-template-columns:1fr}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:18px}
+h2{font-family:'Fraunces',serif;font-size:1.2rem;margin-bottom:12px}
+label{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 4px}
+input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:4px;font:inherit;background:#fff;color:var(--ink)}
+:focus-visible{outline:3px solid #e0a82e;outline-offset:1px}
+.toggle{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.toggle label{margin:0;border:1px solid var(--line);border-radius:4px;padding:9px;text-align:center;cursor:pointer;color:var(--ink)}
+.toggle input{display:none}
+.toggle input:checked+span{font-weight:600}
+.toggle label:has(input:checked){background:var(--ink);color:#fff}
+.btn{margin-top:16px;width:100%;padding:11px;border:0;border-radius:4px;background:var(--bal);color:#fff;font:600 1rem 'Work Sans',sans-serif;cursor:pointer}
+.btn.ghost{background:none;color:var(--muted);border:1px solid var(--line);margin-top:8px}
+.filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.filters select{width:auto;flex:1;min-width:130px}
+ul{list-style:none;padding:0}
+li{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:12px 0;border-bottom:1px dashed var(--line)}
+li:last-child{border:0}
+.desc{font-weight:500}
+.meta{color:var(--muted);font-size:.85rem}
+.amt{font-weight:600;text-align:right}
+.amt.income{color:var(--in)}.amt.expense{color:var(--out)}
+.acts{grid-column:1/-1;display:flex;gap:10px}
+.acts button{background:none;border:0;color:var(--bal);cursor:pointer;font:inherit;font-size:.85rem;padding:2px 0;text-decoration:underline}
+.acts button.del{color:var(--out)}
+.empty{color:var(--muted);padding:20px 0;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Expense Tracker</h1>
+  <p class="sub">Log what comes in and what goes out.</p>
+
+  <section class="cards" aria-label="Financial overview">
+    <div class="sum in"><small>Total income</small><b id="tIn">₹0.00</b></div>
+    <div class="sum out"><small>Total expenses</small><b id="tOut">₹0.00</b></div>
+    <div class="sum bal"><small>Current balance</small><b id="tBal">₹0.00</b></div>
+  </section>
+
+  <div class="main">
+    <form class="panel" id="form">
+      <h2 id="formTitle">Add transaction</h2>
+      <div class="toggle">
+        <label><input type="radio" name="type" value="income"><span>Income</span></label>
+        <label><input type="radio" name="type" value="expense" checked><span>Expense</span></label>
+      </div>
+      <label for="desc">Description</label>
+      <input id="desc" required maxlength="60" placeholder="e.g. Groceries">
+      <label for="amount">Amount (₹)</label>
+      <input id="amount" type="number" min="0.01" step="0.01" required>
+      <label for="cat">Category</label>
+      <select id="cat"></select>
+      <label for="date">Date</label>
+      <input id="date" type="date" required>
+      <button class="btn" id="saveBtn">Add transaction</button>
+      <button class="btn ghost" type="button" id="cancel" hidden>Cancel edit</button>
+    </form>
+
+    <section class="panel">
+      <h2>Transaction history</h2>
+      <div class="filters">
+        <select id="fCat" aria-label="Filter by category"></select>
+        <select id="fType" aria-label="Filter by type">
+          <option value="all">Income and expenses</option>
+          <option value="income">Income only</option>
+          <option value="expense">Expenses only</option>
+        </select>
+      </div>
+      <ul id="list"></ul>
+    </section>
+  </div>
+</div>
+
+<script>
+const CATS=['Salary','Food','Rent','Transport','Shopping','Bills','Health','Entertainment','Other'];
+const KEY='expense-tracker-v1';
+const $=id=>document.getElementById(id);
+let tx=[];try{tx=JSON.parse(localStorage.getItem(KEY))||[]}catch(e){}
+let editId=null;
+const save=()=>localStorage.setItem(KEY,JSON.stringify(tx));
+const money=n=>'₹'+n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+$('cat').innerHTML=CATS.map(c=>`<option>${c}</option>`).join('');
+$('fCat').innerHTML='<option value="all">All categories</option>'+CATS.map(c=>`<option>${c}</option>`).join('');
+$('date').valueAsDate=new Date();
+
+function render(){
+  const inc=tx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const out=tx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  $('tIn').textContent=money(inc);$('tOut').textContent=money(out);$('tBal').textContent=money(inc-out);
+  const fc=$('fCat').value,ft=$('fType').value;
+  const rows=tx.filter(t=>(fc==='all'||t.cat===fc)&&(ft==='all'||t.type===ft))
+    .sort((a,b)=>b.date.localeCompare(a.date));
+  $('list').innerHTML=rows.length?rows.map(t=>`
+    <li>
+      <div><div class="desc">${esc(t.desc)}</div><div class="meta">${t.date} · ${t.cat}</div></div>
+      <div class="amt ${t.type}">${t.type==='income'?'+':'−'}${money(t.amount)}</div>
+      <div class="acts"><button onclick="edit('${t.id}')">Edit</button><button class="del" onclick="del('${t.id}')">Delete</button></div>
+    </li>`).join(''):'<p class="empty">No transactions yet. Add one using the form.</p>';
+}
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+$('form').addEventListener('submit',e=>{
+  e.preventDefault();
+  const data={type:document.querySelector('[name=type]:checked').value,desc:$('desc').value.trim(),
+    amount:parseFloat($('amount').value),cat:$('cat').value,date:$('date').value};
+  if(editId){tx=tx.map(t=>t.id===editId?{...t,...data}:t)}
+  else tx.push({id:Date.now().toString(36),...data});
+  save();reset();render();
+});
+function edit(id){
+  const t=tx.find(x=>x.id===id);editId=id;
+  document.querySelector(`[name=type][value=${t.type}]`).checked=true;
+  $('desc').value=t.desc;$('amount').value=t.amount;$('cat').value=t.cat;$('date').value=t.date;
+  $('formTitle').textContent='Edit transaction';$('saveBtn').textContent='Save changes';$('cancel').hidden=false;
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function del(id){if(confirm('Delete this transaction?')){tx=tx.filter(t=>t.id!==id);save();render()}}
+function reset(){
+  editId=null;$('form').reset();$('date').valueAsDate=new Date();
+  $('formTitle').textContent='Add transaction';$('saveBtn').textContent='Add transaction';$('cancel').hidden=true;
+}
+$('cancel').onclick=reset;
+$('fCat').onchange=$('fType').onchange=render;
+render();
+</script>
+</body>
+</html>
